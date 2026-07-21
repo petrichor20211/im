@@ -255,6 +255,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--group", choices=("C", "D"), default="D")
     parser.add_argument("--cache", action="store_true", help="Preserve the model KV/state cache across ticks")
     parser.add_argument("--split", default="test_in_domain")
+    parser.add_argument("--num-shards", type=int, default=1)
+    parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
@@ -263,9 +265,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = yaml.safe_load(args.config.read_text())
+    if args.num_shards <= 0 or not 0 <= args.shard_index < args.num_shards:
+        raise ValueError("require num_shards > 0 and 0 <= shard_index < num_shards")
     sessions = load_sessions(args.data, {args.split})
     if args.limit:
         sessions = sessions[: args.limit]
+    sessions = [session for index, session in enumerate(sessions) if index % args.num_shards == args.shard_index]
     model, tokenizer, protocol_ids = load_model(config["model"]["base_model"], args.tokenizer, args.adapter)
     if args.group == "D":
         decoder_class = CachedDecoder if args.cache else FullContextDecoder

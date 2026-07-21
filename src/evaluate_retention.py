@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", type=Path, default=Path("data/reasoning/aqua_rat.jsonl"))
     parser.add_argument("--adapter", type=Path)
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -54,22 +55,30 @@ def main() -> None:
             raise ValueError(f"candidate {candidate} is not one token: {encoded}")
         candidate_ids.append(encoded[0])
 
-    rows = []
+    items = []
     with args.data.open(encoding="utf-8") as handle:
         for line in handle:
-            if len(rows) >= args.limit:
-                break
             item = json.loads(line)
-            if item.get("answer") not in candidates:
-                continue
-            prompt = (
-                "Solve the following multiple-choice problem. "
-                "Return only the option letter (A, B, C, D, or E).\n\n"
-                f"{item['problem']}\n\nAnswer:"
-            )
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
-            with torch.inference_mode():
-                logits = model(**inputs, use_cache=False).logits[0, -1].float()
+            if item.get("answer") in candidates:
+                items.append(item)
+            if len(items) >= args.limit:
+                break
+
+    rows = []
+    for start in range(0, len(items), args.batch_size):
+        batch_items = items[start : start + args.batch_size]
+        prompts = [
+            "Solve the following multiple-choice problem. "
+            "Return only the option letter (A, B, C, D, or E).\n\n"
+            f"{item['problem']}\n\nAnswer:"
+            for item in batch_items
+        ]
+        inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(device)
+        last_positions = inputs["attention_mask"].sum(dim=1) - 1
+        with torch.inference_mode():
+            batch_logits = model(**inputs, use_cache=False).logits
+        for row_index, item in enumerate(batch_items):
+            logits = batch_logits[row_index, last_positions[row_index]].float()
             scores = [float(logits[token_id]) for token_id in candidate_ids]
             predicted = candidates[max(range(len(scores)), key=scores.__getitem__)]
             rows.append({"id": item.get("id"), "answer": item["answer"], "predicted": predicted, "correct": predicted == item["answer"]})
