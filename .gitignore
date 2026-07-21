@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+
+# Generated experiment outputs and model artifacts
+artifacts/

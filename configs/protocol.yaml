@@ -1,0 +1,159 @@
+version: 1
+name: text_omni_flow
+
+model:
+  base_model: /120090727/yutong/model/Qwen3.5-0.8B
+  environment: /120090727/yutong/conda_env/text-omni-flow
+  architecture: decoder_only_causal_lm
+  training: qlora
+
+sequence:
+  special_tokens:
+    tick: <tick>
+    input_begin: <input>
+    input_end: </input>
+    output_begin: <output>
+    output_end: </output>
+    listen: <listen>
+    speak: <speak>
+    continue: <continue>
+    stop: <stop>
+    output_finished: <out_end>
+    tick_end: <tick_end>
+  control_tokens:
+    - <listen>
+    - <speak>
+    - <continue>
+    - <stop>
+  expose_absolute_tick_index: false
+  max_input_tokens_per_tick: 16
+  max_output_tokens_per_tick: 4
+  count_special_tokens_in_output_budget: false
+  context_length: 2048
+
+state_machine:
+  initial_state: idle
+  states:
+    - idle
+    - speaking
+  transitions:
+    idle:
+      <listen>: idle
+      <speak>: speaking
+    speaking:
+      <continue>: speaking
+      <stop>: idle
+  output_finished_transition:
+    from: speaking
+    token: <out_end>
+    to: idle
+  control_with_empty_output:
+    - <listen>
+    - <stop>
+
+inference:
+  preserve_context_between_ticks: true
+  preserve_kv_cache_between_ticks: true
+  append_new_input_after_previous_output: true
+  constrained_control_decoding: true
+  reference_implementation: full_growing_context
+  optimized_implementation: kv_cache
+  require_reference_cache_equivalence: true
+
+data:
+  training_sessions: 50000
+  session_ticks:
+    min: 8
+    max: 64
+  test_length_ood_ticks:
+    min: 65
+    max: 128
+  listen_ratio:
+    min: 0.70
+    max: 0.90
+  task_mix:
+    deterministic_clock: 0.50
+    streaming_qa: 0.30
+    interrupt_and_distractor: 0.20
+  splits:
+    - train
+    - validation
+    - test_in_domain
+    - test_template_ood
+    - test_timing_ood
+    - test_length_ood
+    - test_distractor_ood
+  split_by_rule_and_template: true
+  random_split_only: false
+
+loss:
+  mask_input_text: true
+  weights:
+    output_text: 1.0
+    first_or_non_repeated_listen: 1.0
+    repeated_listen: 0.3
+    speak: 2.0
+    stop: 2.0
+    continue: 1.5
+    out_end: 1.5
+    tick_end: 1.0
+
+training:
+  precision: bf16
+  quantization_bits: 4
+  learning_rate_candidates:
+    - 1.0e-4
+    - 2.0e-4
+  warmup_ratio: 0.03
+  weight_decay: 0.1
+  epochs:
+    min: 1
+    max: 3
+  gradient_clipping: 1.0
+  pilot_seeds: 1
+  formal_seeds: 3
+
+experiments:
+  A:
+    trained: false
+    independent_control: false
+    inference: full_input_then_answer
+  B:
+    trained: false
+    independent_control: true
+    inference: chunked_tick
+  C:
+    trained: true
+    independent_control: false
+    inference: chunked_tick
+  D:
+    trained: true
+    independent_control: true
+    inference: chunked_tick
+
+metrics:
+  primary: joint_success_rate
+  report:
+    - control_macro_f1
+    - per_control_precision_recall_f1
+    - false_trigger_rate
+    - onset_exact_0
+    - onset_exact_pm1
+    - onset_mae_ticks
+    - interrupt_stop_latency_ticks
+    - reconstructed_token_exact_match
+    - chunk_overflow_rate
+    - malformed_tick_rate
+    - joint_success_rate
+
+pilot_gates:
+  control_macro_f1_min: 0.90
+  speak_f1_min: 0.85
+  stop_f1_min: 0.85
+  onset_exact_pm1_min: 0.90
+  median_interrupt_stop_latency_ticks_max: 1
+  reconstructed_token_exact_match_min: 0.90
+  chunk_overflow_rate_max: 0.01
+  malformed_tick_rate_max: 0.01
+  D_minus_C_joint_success_absolute_min: 0.10
+  ood_retention_ratio_min: 0.80
