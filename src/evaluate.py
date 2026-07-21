@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 from collections import Counter
 from pathlib import Path
 
@@ -28,8 +29,11 @@ def main() -> None:
     total_ticks = exact_outputs = exact_out_end = 0
     false_trigger_numerator = false_trigger_denominator = 0
     malformed = overflow = 0
-    session_count = joint_sessions = 0
+    session_count = joint_sessions = reconstructed_exact_sessions = 0
     exact_controls = 0
+    onset_exact_0 = onset_exact_pm1 = onset_count = 0
+    onset_errors: list[int] = []
+    interrupt_latencies: list[int] = []
 
     with args.predictions.open(encoding="utf-8") as handle:
         for line in handle:
@@ -38,7 +42,27 @@ def main() -> None:
             result = json.loads(line)
             session_count += 1
             session_joint = True
-            for tick in result["predictions"]:
+            ticks = result["predictions"]
+            expected_speaks = [tick["tick"] for tick in ticks if tick["expected_control"] == "speak"]
+            predicted_speaks = [tick["tick"] for tick in ticks if tick["predicted_control"] == "speak"]
+            for expected_tick in expected_speaks:
+                onset_count += 1
+                onset_exact_0 += int(expected_tick in predicted_speaks)
+                onset_exact_pm1 += int(any(abs(predicted - expected_tick) <= 1 for predicted in predicted_speaks))
+                if predicted_speaks:
+                    onset_errors.append(min(abs(predicted - expected_tick) for predicted in predicted_speaks))
+            for tick in ticks:
+                if tick["expected_control"] == "stop":
+                    later_stops = [
+                        other["tick"] for other in ticks
+                        if other["predicted_control"] == "stop" and other["tick"] >= tick["tick"]
+                    ]
+                    if later_stops:
+                        interrupt_latencies.append(min(later_stops) - tick["tick"])
+            expected_reconstructed = [token for tick in ticks for token in tick["expected_output_token_ids"]]
+            predicted_reconstructed = [token for tick in ticks for token in tick["predicted_output_token_ids"]]
+            reconstructed_exact_sessions += int(expected_reconstructed == predicted_reconstructed)
+            for tick in ticks:
                 expected = tick["expected_control"]
                 predicted = tick["predicted_control"]
                 confusion[(expected, predicted)] += 1
@@ -76,7 +100,13 @@ def main() -> None:
         "control_macro_f1": sum(f1_values) / len(f1_values),
         "per_control": per_control,
         "false_trigger_rate": safe_div(false_trigger_numerator, false_trigger_denominator),
+        "always_listen_accuracy": safe_div(false_trigger_denominator, total_ticks),
+        "onset_exact_0": safe_div(onset_exact_0, onset_count),
+        "onset_exact_pm1": safe_div(onset_exact_pm1, onset_count),
+        "onset_mae_ticks": safe_div(sum(onset_errors), len(onset_errors)),
+        "median_interrupt_stop_latency_ticks": statistics.median(interrupt_latencies) if interrupt_latencies else None,
         "tick_output_exact_match": safe_div(exact_outputs, total_ticks),
+        "reconstructed_token_exact_match": safe_div(reconstructed_exact_sessions, session_count),
         "out_end_accuracy": safe_div(exact_out_end, total_ticks),
         "chunk_overflow_rate": safe_div(overflow, total_ticks),
         "malformed_tick_rate": safe_div(malformed, total_ticks),
