@@ -14,16 +14,16 @@ run_one() {
   local output="$OUTPUT_ROOT/${group}_lr_${lr}"
   mkdir -p "$output"
   echo "[$(date -Is)] starting group=$group lr=$lr gpu=$device output=$output"
-  CUDA_VISIBLE_DEVICES="$device" "$PYTHON" src/train_qlora.py \
+  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True CUDA_VISIBLE_DEVICES="$device" "$PYTHON" src/train_qlora.py \
     --data "$DATA" \
     --tokenizer "$TOKENIZER" \
     --output "$output" \
     --group "$group" \
     --max-train-sessions 500 \
     --max-validation-sessions 256 \
-    --batch-size 1 \
-    --gradient-accumulation 8 \
-    --epochs 1 \
+    --batch-size 32 \
+    --gradient-accumulation 1 \
+    --epochs 3 \
     --learning-rate "$lr" \
     --seed "$SEED" \
     --log-every 10 \

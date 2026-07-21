@@ -53,7 +53,7 @@ class FullContextDecoder:
         return int(allowed_tensor[scores[allowed_tensor].argmax()].item())
 
     def raw_argmax(self, *, content: bool = False) -> int:
-        scores = self.logits()
+        scores = self.logits().clone()
         scores[len(self.tokenizer) :] = -torch.inf
         if content:
             for token_id in self.special_ids - {self.ids["</output>"]}:

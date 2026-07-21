@@ -50,7 +50,9 @@ def set_seed(seed: int) -> None:
 
 
 def weighted_causal_loss(logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
-    shift_logits = logits[:, :-1].contiguous().float()
+    # Keep logits in bf16: materializing a full fp32 copy wastes tens of GB at
+    # large batches because Qwen3.5 has a 248k-token vocabulary.
+    shift_logits = logits[:, :-1].contiguous()
     shift_labels = labels[:, 1:].contiguous()
     shift_weights = weights[:, 1:].contiguous()
     token_loss = F.cross_entropy(
