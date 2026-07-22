@@ -45,7 +45,12 @@ class FullContextDecoder:
     @torch.inference_mode()
     def logits(self) -> torch.Tensor:
         inputs = torch.tensor([self.history], dtype=torch.long, device=self.device)
-        return self.model(input_ids=inputs, attention_mask=torch.ones_like(inputs), use_cache=False).logits[0, -1].float()
+        return self.model(
+            input_ids=inputs,
+            attention_mask=torch.ones_like(inputs),
+            use_cache=False,
+            logits_to_keep=1,
+        ).logits[0, -1].float()
 
     def constrained_argmax(self, allowed: list[int]) -> int:
         scores = self.logits()
@@ -141,6 +146,7 @@ class CachedDecoder(FullContextDecoder):
             past_key_values=self.past_key_values,
             cache_position=cache_position,
             use_cache=True,
+            logits_to_keep=1,
         )
         self.past_key_values = outputs.past_key_values
         self.processed_length = len(self.history)

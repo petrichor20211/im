@@ -14,6 +14,11 @@ mkdir -p "$OUTPUT_ROOT"
 run_group_split() {
   local seed=$1 group=$2 split=$3 device=$4
   local root="$OUTPUT_ROOT/seed_${seed}/${group}/${split}"
+  if [ -s "$root/metrics.json" ]; then
+    echo "[$(date -Is)] skipping completed seed=$seed group=$group split=$split"
+    return 0
+  fi
+  rm -rf "$root/shards"
   mkdir -p "$root/shards"
   local pids=()
   for ((shard=0; shard<SHARDS_PER_GROUP; shard++)); do
@@ -55,6 +60,11 @@ done
 # Untrained chunked baseline B and ordinary multiple-choice baseline are run once.
 for split in "${SPLITS[@]}"; do
   root="$OUTPUT_ROOT/baseline_B/$split"
+  if [ -s "$root/metrics.json" ]; then
+    echo "[$(date -Is)] skipping completed baseline split=$split"
+    continue
+  fi
+  rm -rf "$root/shards"
   mkdir -p "$root/shards"
   pids=()
   total_shards=$((SHARDS_PER_GROUP * 2))
