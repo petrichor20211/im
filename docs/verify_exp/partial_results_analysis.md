@@ -81,14 +81,14 @@ Joint success 没有可辨别差异；D 的重建完整率则明显低于 C。
 | distractor | 1.000 | 1.000 | 1.000 | 1.000 | 均能保持沉默 |
 | wait | 0.375 | 0.341 | 0.951 | 0.825 | D 更容易误触发/丢失内容 |
 | streaming | 0.156 | 0.143 | 0.883 | 0.883 | 内容常可重建，但逐 tick 联合严格成功率低 |
-| interrupt | 0.000 | 0.085 | 0.102 | 0.108 | D 的显式终止信号有局部收益 |
+| interrupt | 0.000 | 0.085 | 0.102 | 0.108 | 表面上 D 更高，但受到 C STOP 表示偏差混淆 |
 
 Interrupt 上两组 control accuracy 都是 100%，但：
 
 - C 的 out-end accuracy 为 97.15%，没有一条 session 达到严格 joint success；
 - D 的 out-end accuracy 为 100%，joint success 达到 8.52%。
 
-这说明独立控制在“明确结束/中断”上确实提供了局部帮助，但收益不足以抵消 D 在 wait、streaming 和内容重建上的损失。
+检查真实预测后发现，这不能直接视为 D 的局部收益。C 没有 `<stop>` token，只能用“空 output + `<out_end>`”表达 STOP；原始 interrupt 标签却要求 `out_end=false`。因此 C 若被解码器识别为 STOP，就会必然在 out-end 指标上与标签冲突。当前 interrupt Joint 对 C 存在结构性不公平，必须先把 C/D 的内部表示规范化为同一语义事件再比较。
 
 ## 5. 对预注册门槛的判断
 
@@ -112,12 +112,12 @@ Interrupt 上两组 control accuracy 都是 100%，但：
 1. **H1 基本得到支持。** trigger、periodic 和 distractor 达到完全成功，说明普通 causal LLM 能学习本实验定义下的固定文本节拍和沉默策略。
 2. **H2 部分得到支持。** streaming 的重建 EM 达到 88.3%，说明模型能在多 tick 中持续输出；但严格 joint success 仅约 14%–16%，逐 tick continuation/out-end 仍不稳定。
 3. **H3 的强版本不受支持。** D 没有在总体 Joint Success 上优于 C，更没有达到预注册的 +10 pp；两个完整测试集上 D 的点估计都略低。
-4. **H3 存在局部信号。** D 在 interrupt 的 out-end 和严格成功率上优于 C，说明显式 STOP/结束控制可能对中断场景有效。
+4. **Interrupt 的表面局部信号不可采信。** C 的隐式 STOP 必须伴随 `<out_end>`，但标签要求 `out_end=false`，所以现有比较偏向 D。
 5. **D 的主要代价是内容完整性和误触发。** D 的 reconstructed EM 在两个测试集都低 2.5–3.3 pp，false-trigger rate 也更高，尽管绝对值仍低。
 6. **协议本身学习成功。** 两组 overflow 和 malformed 都为 0；主要错误来自语义内容、continue/out-end 时序，而不是格式崩坏。
 
 ## 7. 解释限制
 
-C 并非完全没有显式边界：它仍使用 `<output>`、`</output>`、`<out_end>` 和 `<tick_end>`，并可通过“输出是否为空 + 当前状态”隐式恢复控制。因此当前 C/D 对比检验的是“额外独立 LISTEN/SPEAK/CONTINUE/STOP token”的增益，而不是“有无任何状态控制”的增益。任务又高度确定、协议脚手架很强，所以 C 已足以解决大部分控制问题，D 的潜在优势主要只在 interrupt 中显现。
+C 并非完全没有显式边界：它仍使用 `<output>`、`</output>`、`<out_end>` 和 `<tick_end>`，并可通过“输出是否为空 + 当前状态”隐式恢复控制。因此当前 C/D 对比检验的是“额外独立 LISTEN/SPEAK/CONTINUE/STOP token”的增益，而不是“有无任何状态控制”的增益。任务又高度确定、协议脚手架很强，所以 C 已足以解决大部分控制问题。此外，C 的 STOP 表示与原始 out-end 标签不兼容，interrupt 结果不能用于证明 D 的优势。
 
 在没有其余 seeds 行为评价、timing/length/distractor OOD 和 retention 的情况下，不应声称结果具有多 seed 稳定性或完整 OOD 泛化结论。

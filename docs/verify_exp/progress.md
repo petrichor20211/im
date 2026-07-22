@@ -11,7 +11,7 @@
 | Phase 4：500-session pilot | 完成 | `2e-4` 在 validation loss 和生成指标上优于 `1e-4` |
 | Phase 5：正式训练 | 完成 | C/D × 3 seeds；每个模型 35k sessions、3 epochs、3282 steps |
 | Phase 6：正式评价 | 按用户要求提前停止 | 完成 seed 20260721 的 in-domain 与 template OOD，各 2,000 sessions；其余不再运行 |
-| Phase 7：结果分析 | 完成 | 见 `partial_results_analysis.md` |
+| Phase 7：结果分析 | 完成 | 独立完整报告见 `text_omni_flow_final_report.md`；简版见 `partial_results_analysis.md` |
 
 ## 已完成的正式训练
 
@@ -28,7 +28,8 @@
 - `test_template_ood`：C/D 各 2,000 sessions
 - 完整结果：`artifacts/runs/formal_eval/seed_20260721/`
 - 分任务结果：`artifacts/runs/formal_eval/partial_analysis/`
-- 分析报告：`docs/verify_exp/partial_results_analysis.md`
+- 完整实验报告：`docs/verify_exp/text_omni_flow_final_report.md`
+- 简版分析：`docs/verify_exp/partial_results_analysis.md`
 
 `test_timing_ood` 只有中途停止的分片，不纳入任何指标或结论。length OOD、distractor OOD、retention 和 B baseline 未运行。
 
