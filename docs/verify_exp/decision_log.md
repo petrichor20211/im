@@ -32,6 +32,10 @@
 
 最初计划复用 `qwen3omni`，但其中 Transformers 4.57.3 无法识别本地 Qwen3.5 checkpoint。现已创建全新的 Conda 环境 `text-omni-flow`，安装 PyTorch 2.11.0+cu128、Transformers 5.14.1、PEFT 0.19.1 和 bitsandbytes 0.49.2。该修改发生在训练和正式测试之前，不改变模型、数据或评价假设。
 
+## 2026-07-22：停止全量评价
+
+用户要求不再进行全量评价，改为依据当前完整结果分析。已停止 formal evaluation，保留 seed 20260721 的 in-domain 与 template OOD（每个 split、每组各 2,000 sessions）。未完成的 timing OOD 分片不进入结论；length OOD、distractor OOD、retention 和 B baseline 标记为未评价。详细结果见 `partial_results_analysis.md`。
+
 ## 2026-07-21：GPU 资源配置修订
 
 实测训练序列平均 223 tokens、P99 411、最大 480。batch size 32 在随机 batch 下稳定运行，两张 A800 的计算利用率均达到 100%；batch size 40 的短样本单步基准可运行，但真实随机 batch 在反向阶段 OOM，batch size 64 必然 OOM。因此 pilot 冻结为每卡 batch size 32、C/D 分别使用 GPU 0/1 并行。正式训练可在实现长度分桶后重新测试动态 batch，但不得降低 C/D 公平性。
